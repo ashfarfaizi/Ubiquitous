@@ -64,7 +64,7 @@ def resample_25hz(merged: pd.DataFrame) -> pd.DataFrame:
         )
 
     if "activity" in merged.columns:
-        # nearest-neighbour label carry-over, just for evaluating the demo classifier
+        # Carry the nearest activity label for evaluation purposes.
         idx = np.searchsorted(merged["timestamp_ms"], grid)
         idx = np.clip(idx, 0, len(merged) - 1)
         out["activity"] = merged["activity"].values[idx]
@@ -119,8 +119,8 @@ def _window_features(window: pd.DataFrame) -> dict:
         feats[f"{col}_max"] = float(np.max(v))
         feats[f"{col}_energy"] = float(np.mean(v ** 2))
 
-        # dominant frequency via FFT - this is what separates "walking" from
-        # "standing and moving" more than any raw amplitude number does
+        # Dominant frequency via FFT captures periodic motion patterns
+        # that may help distinguish different activities.
         if len(v) >= 4:
             spectrum = np.abs(np.fft.rfft(v - np.mean(v)))
             freqs = np.fft.rfftfreq(len(v), d=1.0 / TARGET_HZ)
