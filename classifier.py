@@ -76,10 +76,21 @@ def train(save: bool = True):
 
 
 def load_model():
-    if not os.path.exists(MODEL_PATH):
-        return train(save=True)
-    bundle = joblib.load(MODEL_PATH)
-    return bundle["model"], bundle["columns"]
+    if os.path.exists(MODEL_PATH):
+        try:
+            bundle = joblib.load(MODEL_PATH)
+            model, columns = bundle["model"], bundle["columns"]
+            # Fail fast if this pickle was written by another numpy/sklearn.
+            probe = np.zeros((1, len(columns)), dtype=float)
+            model.predict(probe)
+            return model, columns
+        except Exception as exc:
+            print("could not use saved model (%s); training a fresh one" % exc)
+            try:
+                os.remove(MODEL_PATH)
+            except OSError:
+                pass
+    return train(save=True)
 
 
 def classify_windows(feature_rows, model, columns):

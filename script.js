@@ -31,10 +31,12 @@ async function checkBackend() {
 
         if (data.status === "ok") {
             dot.classList.add("online");
-            status.textContent = "Backend Online";
+            status.textContent = data.pipeline_ready
+                ? "Server up, timeline ready"
+                : "Server up — first question trains/loads the model";
         } else {
             dot.classList.add("offline");
-            status.textContent = "Backend Error";
+            status.textContent = "Server error";
         }
     } catch (error) {
         dot.classList.add("offline");
@@ -138,10 +140,11 @@ async function loadTimeline() {
             const row = document.createElement("div");
             row.className = "timeline-item";
 
-            const activity = item.activity ?? item.label ?? item.prediction ?? item.activity_event ?? "Activity";
+            const rawActivity = item.activity ?? item.label ?? item.prediction ?? item.activity_event ?? "Activity";
+            const activity = String(rawActivity).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
             const start = item.start_s ?? item.start ?? item.start_time ?? "?";
             const end = item.end_s ?? item.end ?? item.end_time ?? "?";
-            const confidence = item.confidence ?? item.probability ?? item.score;
+            const confidence = item.avg_confidence ?? item.confidence ?? item.probability ?? item.score;
 
             const confidenceText = confidence !== undefined
                 ? "confidence " + (typeof confidence === "number" ? (confidence * 100).toFixed(1) + "%" : confidence)
@@ -164,8 +167,14 @@ async function loadTimeline() {
             more.textContent = `Showing first 40 of ${timeline.length} intervals.`;
             container.appendChild(more);
         }
+
+        const note = document.getElementById("pipelineNote");
+        if (note && data.stats) {
+            note.textContent = data.stats.windows_classified
+                + " windows, " + data.stats.timeline_segments + " intervals";
+        }
     } catch (error) {
-        container.innerHTML = `<div style="color:#b91c1c;">Could not load timeline: ${escapeHtml(error.message)}</div>`;
+            container.innerHTML = `<div class="error" style="display:block">Could not load timeline: ${escapeHtml(error.message)}</div>`;
     }
 }
 

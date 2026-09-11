@@ -139,22 +139,32 @@ def generate_day(out_dir: str, uuid: str = "demo-user-01"):
     return accel_path, gyro_path
 
 
-def generate_clip(out_dir, uuid="demo-user-01", seconds_per_activity=90.0, hz=40.0):
+def generate_clip(out_dir, uuid="demo-user-01", hz=40.0):
     """
-    Compact continuous recording: each of the seven ExtraSensory classes in
-    sequence. Fast enough to classify interactively, and long enough for
-    duration / onset / comparison questions.
+    Compact recording with all seven ExtraSensory classes, walking in two
+    stretches so duration/count questions have something real to add up.
     """
     os.makedirs(out_dir, exist_ok=True)
+    schedule = [
+        ("LYING_DOWN", 140.0),
+        ("SITTING", 50.0),
+        ("STANDING_IN_PLACE", 30.0),
+        ("WALKING", 80.0),
+        ("SITTING", 25.0),
+        ("WALKING", 40.0),
+        ("RUNNING", 55.0),
+        ("BICYCLING", 70.0),
+        ("STANDING_AND_MOVING", 25.0),
+    ]
     accel_rows, gyro_rows = [], []
     t = 0
-    for activity in ACTIVITIES:
-        accel, gyro = _make_burst(activity, t, duration_s=seconds_per_activity, hz=hz)
+    for activity, duration_s in schedule:
+        accel, gyro = _make_burst(activity, t, duration_s=duration_s, hz=hz)
         accel["activity"] = activity
         gyro["activity"] = activity
         accel_rows.append(accel)
         gyro_rows.append(gyro)
-        t += int(seconds_per_activity * 1000)
+        t += int(duration_s * 1000)
 
     accel_df = pd.concat(accel_rows, ignore_index=True)
     gyro_df = pd.concat(gyro_rows, ignore_index=True)

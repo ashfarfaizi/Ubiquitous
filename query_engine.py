@@ -36,34 +36,28 @@ DISPLAY = {
     "BICYCLING": "Bicycling",
 }
 
+# short, signal-level reasons (not class slogans)
 SIGNAL_WHY = {
     "LYING_DOWN": (
-        "near-zero accelerometer variance and minimal gyroscope activity, "
-        "consistent with a static recumbent posture rather than a brief pause"
+        "accel variance is almost flat and the gyro barely moves, which is what a long lie looks like, not a short pause"
     ),
     "SITTING": (
-        "low accelerometer magnitude variance with gravity stable on one axis "
-        "and only small gyroscope motion, consistent with a seated posture"
+        "gravity sits on one axis, accel wobble is small, and gyro motion stays low — typical seated posture"
     ),
     "STANDING_IN_PLACE": (
-        "low-amplitude accelerometer sway around gravity with weak gyroscope "
-        "oscillation, consistent with upright stance without locomotion"
+        "there is a bit of upright sway around gravity, but no step cadence in the accel magnitude"
     ),
     "STANDING_AND_MOVING": (
-        "moderate accelerometer energy without a clear heel-strike cadence, "
-        "together with irregular gyroscope motion, consistent with standing while fidgeting"
+        "accel energy is higher than quiet standing, yet there is no clean heel-strike rhythm"
     ),
     "WALKING": (
-        "periodic accelerometer magnitude at a walking step frequency, with "
-        "moderate gyroscope oscillation from arm/leg swing"
+        "accel magnitude has a walking-like step beat and the gyro swings with each stride"
     ),
     "RUNNING": (
-        "a sustained rise in accelerometer magnitude at a higher step frequency, "
-        "together with larger gyroscope oscillations than walking"
+        "accel peaks get larger and the step rate jumps, with bigger gyro swings than walking"
     ),
     "BICYCLING": (
-        "smooth cyclic acceleration at a steady cadence without discrete heel-strike "
-        "spikes, plus sustained periodic gyroscope oscillation consistent with pedaling"
+        "the accel is smooth and cyclic, without the sharp heel-strike spikes of gait, and the gyro keeps a steady pedal-like oscillation"
     ),
 }
 
@@ -87,11 +81,6 @@ def _find_activities(text):
             found.append(activity)
             seen.add(activity)
     return found
-
-
-def _find_activity(text):
-    acts = _find_activities(text)
-    return acts[0] if acts else None
 
 
 def _seconds_in_text(text):
@@ -148,21 +137,9 @@ def _signal_stats(segs):
     freq = sum(s.get("ax_dom_freq", 0.0) for s in segs) / len(segs)
     gyr = sum(s.get("gyro_energy", 0.0) for s in segs) / len(segs)
     return (
-        " Observed accelerometer magnitude std=%.3f, dominant Acc-X frequency=%.2f Hz, "
-        "mean gyroscope energy=%.3f."
+        " On the cited stretch, accel magnitude std was %.3f, the main Acc-X frequency "
+        "was %.2f Hz, and mean gyro energy was %.3f."
         % (mag, freq, gyr)
-    )
-
-
-def _empty(question):
-    return _pack(
-        question,
-        answer="N/A",
-        activity="N/A",
-        timestamps="N/A",
-        modality="N/A",
-        channels="N/A",
-        explanation="No classified activity timeline is available yet.",
     )
 
 
@@ -225,6 +202,18 @@ def _grounded(question, answer, activity_label, segs, explanation):
     )
 
 
+def _empty(question):
+    return _pack(
+        question,
+        answer="N/A",
+        activity="N/A",
+        timestamps="N/A",
+        modality="N/A",
+        channels="N/A",
+        explanation="No classified activity timeline is available yet.",
+    )
+
+
 def answer(question, timeline, stats=None):
     q = (question or "").strip()
     if not q:
@@ -237,38 +226,67 @@ def answer(question, timeline, stats=None):
     activity = activities[0] if activities else None
     at_s = _seconds_in_text(ql)
 
-    # Task 1 / time-local: "what was the user doing at 120 seconds?"
     if at_s is not None and any(w in ql for w in ("what", "doing", "activity")):
         match = next((seg for seg in timeline if seg["start_s"] <= at_s <= seg["end_s"]), None)
         if not match:
             return _pack(
                 q, "N/A", "N/A", "N/A", "N/A", "N/A",
-                "No classified activity covers %.1f seconds from start." % at_s,
+                "Nothing classified covers %.1f seconds from start." % at_s,
             )
         label = _pretty(match["activity"])
         return _grounded(
             q, label, label, [match],
-            "At %.0f seconds from start the windowed accelerometer and gyroscope "
-            "features classified the interval as %s (%s).%s"
-            % (at_s, label, SIGNAL_WHY[match["activity"]], _signal_stats([match])),
+            "At %.0f s the windowed accel/gyro features look like %s: %s.%s"
+            % (at_s, label.lower(), SIGNAL_WHY[match["activity"]], _signal_stats([match])),
         )
 
-    # Task 2: duration
-    if activity and any(w in ql for w in ("how long", "how much time", "total time", "duration", "spend")) and "more" not in ql and " or " not in ql:
+    # Task 4 first so "did ... lie down for a prolonged period" is not treated as yes/no class check
+    if any(w in ql for w in ("prolonged", "long period", "long time", "extended")) and any(
+        w in ql for w in ("lie", "lying", "rest", "sleep", "bed")
+    ):
+        segs = _matches(timeline, "LYING_DOWN")
+        longest = max((s["duration_s"] for s in segs), default=0.0)
+        rec_len = max((s["end_s"] for s in timeline), default=1.0)
+        if longest >= max(60.0, 0.08 * rec_len):
+            ans = "Likely yes"
+        elif segs:
+            ans = "Possibly, but only briefly"
+        else:
+            ans = "No"
+        return _grounded(
+            q, ans, "Prolonged lying down", segs,
+            "%s. The longest quiet stretch labelled lying down lasts %.0f seconds. %s.%s"
+            % (ans, longest, SIGNAL_WHY["LYING_DOWN"].rstrip("."), _signal_stats(segs[:1])),
+        )
+
+    if any(w in ql for w in ("wheel", "pedal", "cycl", "bike", "outdoor physical")):
+        segs = _matches(timeline, "BICYCLING")
+        if segs:
+            return _grounded(
+                q, "Yes",
+                "Unknown outdoor physical activity, consistent with cycling",
+                segs,
+                "Yes. That stretch looks like a low-impact wheeled/pedal mode: %s.%s"
+                % (SIGNAL_WHY["BICYCLING"], _signal_stats(segs)),
+            )
+        return _grounded(
+            q, "No", "Unknown outdoor physical activity, consistent with cycling", [],
+            "No. We did not see the smooth cyclic accel / gyro pattern that usually comes with pedaling.",
+        )
+
+    if activity and any(w in ql for w in ("how long", "how much time", "total time", "duration")) and "more" not in ql and " or " not in ql:
         segs = _matches(timeline, activity)
         total = int(round(sum(s["duration_s"] for s in segs)))
         label = _pretty(activity)
         if not segs:
             return _grounded(q, "0 seconds", label, [], "%s was not detected in this recording." % label)
-        bits = ", ".join("%d seconds" % int(round(s["duration_s"])) for s in segs[:6])
+        bits = " and ".join("%d seconds" % int(round(s["duration_s"])) for s in segs[:6])
         return _grounded(
             q, "%d seconds" % total, label, segs,
-            "%s was detected in %d interval(s) (%s), which sum to %d seconds. "
-            "The claim is taken from those classified intervals. %s%s"
-            % (label, len(segs), bits, total, SIGNAL_WHY[activity], _signal_stats(segs)),
+            "%s was detected in %d interval(s), of %s, which sum to %d seconds. %s.%s"
+            % (label, len(segs), bits, total, SIGNAL_WHY[activity].rstrip("."), _signal_stats(segs)),
         )
 
-    # Task 2: comparison
     if "more" in ql or "longer" in ql or (" or " in ql and any(w in ql for w in ("walk", "run", "sit", "lying", "stand", "cycl"))):
         pair = activities[:2]
         if len(pair) < 2:
@@ -284,22 +302,19 @@ def answer(question, timeline, stats=None):
             segs = _matches(timeline, a) + _matches(timeline, b)
             return _grounded(
                 q, _pretty(winner), "%s, %s" % (_pretty(a), _pretty(b)), segs,
-                "Total %s time was %d seconds and total %s time was %d seconds "
-                "over the recording, so %s is larger."
+                "Total %s time was %d seconds and total %s time was %d seconds over the recording, so %s is larger."
                 % (_pretty(a), ta, _pretty(b), tb, _pretty(winner)),
             )
 
-    # Task 2: count
     if activity and any(w in ql for w in ("how many times", "how many segments", "how often", "number of")):
         segs = _matches(timeline, activity)
         label = _pretty(activity)
         return _grounded(
             q, str(len(segs)), label, segs,
-            "%d separate interval(s) of %s were detected after collapsing consecutive "
-            "windows with the same label." % (len(segs), label),
+            "%d separate interval(s) of %s after merging neighbouring windows with the same label."
+            % (len(segs), label),
         )
 
-    # Task 3: onset / begin / start
     if any(w in ql for w in ("begin", "began", "start", "started", "onset", "when did")):
         target = activity or "RUNNING"
         segs = _matches(timeline, target)
@@ -307,17 +322,16 @@ def answer(question, timeline, stats=None):
         if not segs:
             return _grounded(
                 q, "No", label, [],
-                "%s was not detected, so no onset time is available." % label,
+                "%s was not detected, so there is no onset time." % label,
             )
         t0 = int(round(segs[0]["start_s"]))
         verb = "Yes, %s began at %d seconds" % (label.lower(), t0)
         return _grounded(
             q, verb, "Onset of %s" % label.lower(), segs,
-            "%s. Supporting interval(s) show %s.%s"
+            "%s. From that point the signal matches running/gait change: %s.%s"
             % (verb, SIGNAL_WHY[target], _signal_stats(segs[:1])),
         )
 
-    # Task 2: when
     if activity and "when" in ql:
         segs = _matches(timeline, activity)
         label = _pretty(activity)
@@ -325,10 +339,9 @@ def answer(question, timeline, stats=None):
             return _grounded(q, "N/A", label, [], "No %s intervals were found." % label.lower())
         return _grounded(
             q, _fmt_spans(segs), label, segs,
-            "%s occurs in the listed intervals, obtained by aggregating classified windows." % label,
+            "%s shows up in the listed intervals (seconds from start)." % label,
         )
 
-    # Task 1: binary verification
     if activity and (
         ql.startswith("is ")
         or ql.startswith("did ")
@@ -341,21 +354,20 @@ def answer(question, timeline, stats=None):
         if segs:
             return _grounded(
                 q, "Yes", label, segs,
-                "Yes. %s was classified in the cited interval(s) from accelerometer "
-                "and gyroscope windows. %s%s" % (label, SIGNAL_WHY[activity], _signal_stats(segs[:3])),
+                "Yes. %s turns up in the cited interval(s). %s.%s"
+                % (label, SIGNAL_WHY[activity].rstrip("."), _signal_stats(segs[:3])),
             )
         return _grounded(
             q, "No", label, [],
-            "No. %s was not present among the classified windows in this recording." % label,
+            "No. None of the classified windows were labelled %s." % label.lower(),
         )
 
-    # Task 1: open identification
     if any(w in ql for w in ("what activity", "what is the user", "what was the user", "performing", "doing")):
         totals = _totals(timeline)
         rec_len = max((s["end_s"] for s in timeline), default=1.0)
         act, total = _dominant(timeline)
         share = total / rec_len if rec_len else 0.0
-        if share < 0.5 and len(totals) > 1:
+        if share < 0.45 and len(totals) > 1:
             order = []
             for seg in timeline:
                 if seg["activity"] not in order:
@@ -363,81 +375,42 @@ def answer(question, timeline, stats=None):
             labels = ", ".join(_pretty(a) for a in order)
             return _grounded(
                 q, labels, labels, timeline,
-                "The recording contains several ExtraSensory classes in sequence rather "
-                "than one dominant activity: %s. Intervals are taken from classified "
-                "accelerometer and gyroscope windows (25 Hz, 2 s)." % labels,
+                "This clip is mixed, not one pose the whole time. In order: %s. "
+                "Labels come from 2 s windows on 25 Hz accel + gyro."
+                % labels,
             )
         segs = _matches(timeline, act)
         label = _pretty(act)
         extra = ""
         if len(totals) > 1:
-            extra = " This is the majority activity by duration (%.0f seconds); other activities are also present." % total
+            extra = " That is the longest total (%.0f s); other labels also appear." % total
         return _grounded(
             q, label, label, segs,
-            "Windowed triaxial accelerometer and gyroscope features were classified "
-            "into seven ExtraSensory posture/locomotion classes. The dominant label "
-            "is %s because %s.%s%s" % (label, SIGNAL_WHY[act], extra, _signal_stats(segs[:3])),
+            "Most of the recording classifies as %s: %s.%s%s"
+            % (label.lower(), SIGNAL_WHY[act], extra, _signal_stats(segs[:3])),
         )
 
-    # Task 4: prolonged lying / rest
-    if any(w in ql for w in ("prolonged", "long period", "long time", "extended")) and any(
-        w in ql for w in ("lie", "lying", "rest", "sleep", "bed")
-    ):
-        segs = _matches(timeline, "LYING_DOWN")
-        longest = max((s["duration_s"] for s in segs), default=0.0)
-        rec_len = max((s["end_s"] for s in timeline), default=1.0)
-        if longest >= max(60.0, 0.08 * rec_len):
-            ans = "Likely yes"
-        elif segs:
-            ans = "Possibly, but only briefly"
-        else:
-            ans = "No"
-        return _grounded(
-            q, ans, "Prolonged lying down", segs,
-            "%s. Longest lying-down interval is %.0f seconds. %s%s"
-            % (ans, longest, SIGNAL_WHY["LYING_DOWN"], _signal_stats(segs[:1])),
-        )
-
-    # Task 4: wheeled / pedal
-    if any(w in ql for w in ("wheel", "pedal", "cycl", "bike", "outdoor physical")):
-        segs = _matches(timeline, "BICYCLING")
-        if segs:
-            return _grounded(
-                q, "Yes",
-                "Unknown outdoor physical activity, consistent with cycling",
-                segs,
-                "Yes. The cited segment shows %s.%s"
-                % (SIGNAL_WHY["BICYCLING"], _signal_stats(segs)),
-            )
-        return _grounded(
-            q, "No", "Unknown outdoor physical activity, consistent with cycling", [],
-            "No cyclic low-impact cadence consistent with pedaling or a wheeled mode was classified.",
-        )
-
-    # Task 4: strenuous
     if "strenuous" in ql or "intense" in ql or "vigorous" in ql:
         strenuous = [s for s in timeline if s["activity"] in ("RUNNING", "BICYCLING")]
         if strenuous:
             labels = ", ".join(sorted({_pretty(s["activity"]) for s in strenuous}))
             return _grounded(
                 q, "Yes", labels, strenuous,
-                "Yes. High-intensity locomotion (%s) appears in the cited intervals, "
-                "with elevated accelerometer magnitude and gyroscope oscillation.%s"
+                "Yes. %s shows up, with higher accel magnitude and gyro motion than the sedentary bits.%s"
                 % (labels, _signal_stats(strenuous[:3])),
             )
         return _grounded(
             q, "No", "N/A", [],
-            "No running or bicycling intervals were detected, and remaining classes are sedentary or light.",
+            "No running or bicycling intervals, and the rest looks light or still.",
         )
 
-    # majority / most
     if "most" in ql:
         act, total = _dominant(timeline)
         segs = _matches(timeline, act)
         label = _pretty(act)
         return _grounded(
             q, label, label, segs,
-            "The largest total duration is %s at %d seconds." % (label, int(round(total))),
+            "Longest total duration is %s at %d seconds." % (label, int(round(total))),
         )
 
     act, total = _dominant(timeline)
@@ -445,8 +418,8 @@ def answer(question, timeline, stats=None):
     label = _pretty(act)
     return _grounded(
         q, label, label, segs,
-        "Interpreted as an identification question. The dominant classified activity "
-        "is %s (%d seconds total). Try a more specific question such as "
-        "\"How long was the user walking?\" or \"Did the user begin running at any point, and if so, when?\"."
+        "Took this as an identification question. Dominant label is %s (%d s total). "
+        "Clearer examples: \"How long was the user walking?\" or "
+        "\"Did the user begin running at any point, and if so, when?\"."
         % (label, int(round(total))),
     )
