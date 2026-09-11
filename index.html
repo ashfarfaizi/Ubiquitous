@@ -4,49 +4,41 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ask the Sensors | Activity QA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<div class="container">
+<div class="page">
 
-    <section class="hero">
-        <div class="tag">CS60055 · Ubiquitous Computing</div>
-        <h1>Ask the <span>Sensors</span></h1>
+    <header class="hero">
+        <p class="course-note">A little project for CS60055, Ubiquitous Computing</p>
+        <h1>Ask the sensors what your body was doing.</h1>
         <p class="subtitle">
-            Grounded and explainable activity question answering
-            from wearable accelerometer and gyroscope signals.
+            Point it at a stretch of accelerometer and gyroscope data and ask a plain
+            question — it answers with the activity, the exact moment, and the
+            channels it looked at to get there.
         </p>
-        <div class="sensor-tags">
-            <span class="sensor-tag">Accelerometer X/Y/Z</span>
-            <span class="sensor-tag">Gyroscope X/Y/Z</span>
-            <span class="sensor-tag">25 Hz</span>
-            <span class="sensor-tag">7 Activities</span>
-            <span class="sensor-tag">Evidence Grounded</span>
-        </div>
-    </section>
+        <p class="sensor-line">Accelerometer X/Y/Z &nbsp;·&nbsp; Gyroscope X/Y/Z &nbsp;·&nbsp; 25 Hz &nbsp;·&nbsp; 7 activities</p>
+    </header>
 
     <div class="status-bar">
-        <div class="status-item">
+        <span class="status-item">
             <span id="backendDot" class="dot"></span>
-            <span id="backendStatus">Checking backend...</span>
-        </div>
-        <div class="status-item">
-            <span class="dot online"></span>
-            Activity Recognition Pipeline
-        </div>
-        <div class="status-item">
-            <span class="dot online"></span>
-            Evidence Retrieval
-        </div>
+            <span id="backendStatus">Checking backend…</span>
+        </span>
+        <span class="status-item"><span class="dot online"></span>Activity recognition running</span>
+        <span class="status-item"><span class="dot online"></span>Evidence lookup ready</span>
     </div>
 
     <section class="panel">
-        <div class="panel-title">// Ask a Question</div>
+        <h2>Ask a question</h2>
 
         <div class="question-row">
             <input id="questionInput" type="text" placeholder="e.g. How long was the user walking?" autocomplete="off">
-            <button id="askButton">ANALYZE</button>
+            <button id="askButton">Ask</button>
         </div>
 
         <div class="examples">
@@ -58,17 +50,17 @@
             <button class="example">How many times did the user walk?</button>
         </div>
 
-        <div id="loading" class="loading">Analyzing sensor timeline...</div>
+        <div id="loading" class="loading">Reading through the sensor timeline…</div>
         <div id="errorBox" class="error"></div>
     </section>
 
     <section id="resultPanel" class="panel">
-        <div class="panel-title">// Grounded Answer</div>
+        <h2>Here's what it found</h2>
         <div id="answer" class="answer">—</div>
 
         <div class="result-grid">
             <div class="result-box">
-                <div class="result-label">Activity / Event</div>
+                <div class="result-label">Activity / event</div>
                 <div id="activityEvent" class="result-value">—</div>
             </div>
 
@@ -78,36 +70,36 @@
             </div>
 
             <div class="result-box">
-                <div class="result-label">Sensor Modality</div>
+                <div class="result-label">Sensor modality</div>
                 <div id="sensorModality" class="result-value">—</div>
             </div>
 
             <div class="result-box">
-                <div class="result-label">Sensor Channel(s)</div>
+                <div class="result-label">Sensor channel(s)</div>
                 <div id="sensorChannels" class="result-value">—</div>
             </div>
 
             <div class="result-box full">
-                <div class="result-label">Explanation</div>
+                <div class="result-label">Why</div>
                 <div id="explanation" class="result-value">—</div>
             </div>
         </div>
     </section>
 
     <section class="panel">
-        <div class="panel-title">// Detected Activity Timeline</div>
+        <h2>Detected activity timeline</h2>
         <div id="timeline">
-            <div style="color:var(--muted);">Loading sensor timeline...</div>
+            <div class="muted-note">Loading the sensor timeline…</div>
         </div>
     </section>
 
     <section class="panel">
-        <div class="panel-title">// Supported Activities</div>
+        <h2>What it can recognize</h2>
         <div class="activities">
-            <span class="activity-chip">Lying Down</span>
+            <span class="activity-chip">Lying down</span>
             <span class="activity-chip">Sitting</span>
-            <span class="activity-chip">Standing in Place</span>
-            <span class="activity-chip">Standing and Moving</span>
+            <span class="activity-chip">Standing in place</span>
+            <span class="activity-chip">Standing and moving</span>
             <span class="activity-chip">Walking</span>
             <span class="activity-chip">Running</span>
             <span class="activity-chip">Bicycling</span>
@@ -115,9 +107,8 @@
     </section>
 
     <footer>
-        Ask the Sensors · Grounded Activity Question Answering
-        <br><br>
-        Accelerometer + Gyroscope · ExtraSensory Activity Recognition
+        Ask the Sensors — grounded activity question answering, built on accelerometer
+        and gyroscope readings from the ExtraSensory dataset.
     </footer>
 
 </div>
