@@ -139,5 +139,33 @@ def generate_day(out_dir: str, uuid: str = "demo-user-01"):
     return accel_path, gyro_path
 
 
+def generate_clip(out_dir, uuid="demo-user-01", seconds_per_activity=90.0, hz=40.0):
+    """
+    Compact continuous recording: each of the seven ExtraSensory classes in
+    sequence. Fast enough to classify interactively, and long enough for
+    duration / onset / comparison questions.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    accel_rows, gyro_rows = [], []
+    t = 0
+    for activity in ACTIVITIES:
+        accel, gyro = _make_burst(activity, t, duration_s=seconds_per_activity, hz=hz)
+        accel["activity"] = activity
+        gyro["activity"] = activity
+        accel_rows.append(accel)
+        gyro_rows.append(gyro)
+        t += int(seconds_per_activity * 1000)
+
+    accel_df = pd.concat(accel_rows, ignore_index=True)
+    gyro_df = pd.concat(gyro_rows, ignore_index=True)
+    accel_path = os.path.join(out_dir, f"{uuid}_accel_raw.csv")
+    gyro_path = os.path.join(out_dir, f"{uuid}_gyro_raw.csv")
+    accel_df.to_csv(accel_path, index=False)
+    gyro_df.to_csv(gyro_path, index=False)
+    print(f"wrote {len(accel_df):,} accel rows -> {accel_path}")
+    print(f"wrote {len(gyro_df):,} gyro rows  -> {gyro_path}")
+    return accel_path, gyro_path
+
+
 if __name__ == "__main__":
-    generate_day(os.path.join(os.path.dirname(__file__), "data", "raw"))
+    generate_clip(os.path.join(os.path.dirname(__file__), "data", "raw"))

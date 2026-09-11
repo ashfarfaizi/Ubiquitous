@@ -78,26 +78,28 @@ async function askQuestion() {
 }
 
 function displayResult(data) {
-    // backend field names aren't always consistent, so we fall back a lot here
     const evidence = data.evidence || {};
 
     document.getElementById("answer").textContent =
-        safeValue(data.answer ?? data.result);
+        safeValue(data.Answer ?? data.answer ?? data.result);
 
     document.getElementById("activityEvent").textContent =
-        safeValue(data.activity_event ?? data.activity ?? data.event);
+        safeValue(data["Activity/Event"] ?? data.activity_event ?? data.activity);
 
     document.getElementById("timestamps").textContent =
-        safeValue(evidence.timestamps ?? evidence.timestamp ?? data.timestamps ?? data.timestamp);
+        safeValue(data["Timestamp(s)"] ?? evidence.timestamps ?? data.timestamps);
 
     document.getElementById("sensorModality").textContent =
-        safeValue(evidence.sensor_modality ?? evidence.modality ?? data.sensor_modality);
+        safeValue(data["Sensor Modality"] ?? evidence.sensor_modality ?? data.sensor_modality);
 
     document.getElementById("sensorChannels").textContent =
-        safeValue(evidence.sensor_channels ?? evidence.channels ?? data.sensor_channels);
+        safeValue(data["Sensor Channel(s)"] ?? evidence.sensor_channels ?? data.sensor_channels);
 
     document.getElementById("explanation").textContent =
-        safeValue(data.explanation ?? data.reasoning);
+        safeValue(data.Explanation ?? data.explanation);
+
+    document.getElementById("formatted").textContent =
+        data.formatted || "—";
 
     resultPanel.style.display = "block";
     resultPanel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -137,8 +139,8 @@ async function loadTimeline() {
             row.className = "timeline-item";
 
             const activity = item.activity ?? item.label ?? item.prediction ?? item.activity_event ?? "Activity";
-            const start = item.start ?? item.start_time ?? item.start_sec ?? item.start_s ?? "?";
-            const end = item.end ?? item.end_time ?? item.end_sec ?? item.end_s ?? "?";
+            const start = item.start_s ?? item.start ?? item.start_time ?? "?";
+            const end = item.end_s ?? item.end ?? item.end_time ?? "?";
             const confidence = item.confidence ?? item.probability ?? item.score;
 
             const confidenceText = confidence !== undefined

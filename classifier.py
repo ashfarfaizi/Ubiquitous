@@ -69,7 +69,7 @@ def train(save: bool = True):
 
     if save:
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        joblib.dump({"model": clf, "columns": list(X.columns)}, MODEL_PATH)
+        joblib.dump({"model": clf, "columns": list(X.columns)}, MODEL_PATH, protocol=4)
         print(f"saved model -> {MODEL_PATH}")
 
     return clf, list(X.columns)

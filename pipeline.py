@@ -1,63 +1,81 @@
 """
-pipeline.py
-
-Wires the whole thing together, top to bottom of the diagram:
+End-to-end recognition pipeline:
 
     raw accel + gyro
-        -> match_timestamps
-        -> resample_25hz
-        -> handle_missing
-        -> make_windows
-        -> classify_windows
-        -> collapse into an activity timeline
-
-run_pipeline() is the one function everything else (the Flask app, the CLI)
-calls.
+        -> match timestamps
+        -> resample 25 Hz
+        -> handle missing samples
+        -> window + features
+        -> classify
+        -> activity timeline (seconds from recording start)
 """
 
-from datetime import datetime, timezone
+import os
 
+import classifier
 import data_loader
 import preprocessing as prep
-import classifier
 
 
-def _fmt(ts_ms: int) -> str:
-    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime("%H:%M:%S")
-
-
-def build_timeline(meta, preds, confidences):
-    """Collapses consecutive windows with the same predicted label into
-    single timeline segments, the way a human would describe their day
-    ("sitting from 9 to 11", not fifty separate two-second entries)."""
+def build_timeline(meta, preds, confidences, feature_rows, t0_ms):
+    """Collapse consecutive same-label windows into intervals."""
     segments = []
-    for m, pred, conf in zip(meta, preds, confidences):
-        if segments and segments[-1]["activity"] == pred and m["start_ms"] - segments[-1]["end_ms"] < 5000:
+    for m, pred, conf, feats in zip(meta, preds, confidences, feature_rows):
+        start_s = (m["start_ms"] - t0_ms) / 1000.0
+        end_s = (m["end_ms"] - t0_ms) / 1000.0
+        if (
+            segments
+            and segments[-1]["activity"] == pred
+            and start_s - segments[-1]["end_s"] < 5.0
+        ):
+            segments[-1]["end_s"] = end_s
             segments[-1]["end_ms"] = m["end_ms"]
             segments[-1]["confidences"].append(conf)
+            segments[-1]["features"].append(feats)
         else:
             segments.append({
                 "activity": pred,
                 "start_ms": m["start_ms"],
                 "end_ms": m["end_ms"],
+                "start_s": start_s,
+                "end_s": end_s,
                 "confidences": [conf],
+                "features": [feats],
             })
 
     timeline = []
     for s in segments:
+        feats = s["features"]
+        n = max(len(feats), 1)
+
+        def mean_feat(key):
+            return sum(float(f.get(key, 0.0) or 0.0) for f in feats) / n
+
         timeline.append({
             "activity": s["activity"],
             "start_ms": s["start_ms"],
             "end_ms": s["end_ms"],
-            "start_time": _fmt(s["start_ms"]),
-            "end_time": _fmt(s["end_ms"]),
-            "duration_s": round((s["end_ms"] - s["start_ms"]) / 1000, 1),
+            "start_s": round(s["start_s"], 1),
+            "end_s": round(s["end_s"], 1),
+            "start": round(s["start_s"], 1),
+            "end": round(s["end_s"], 1),
+            "start_time": round(s["start_s"], 1),
+            "end_time": round(s["end_s"], 1),
+            "duration_s": round(s["end_s"] - s["start_s"], 1),
             "avg_confidence": round(sum(s["confidences"]) / len(s["confidences"]), 3),
+            "confidence": round(sum(s["confidences"]) / len(s["confidences"]), 3),
+            "accel_mag_std": round(mean_feat("accel_mag_std"), 4),
+            "accel_mag_mean": round(mean_feat("accel_mag_mean"), 4),
+            "ax_dom_freq": round(mean_feat("ax_dom_freq"), 3),
+            "gyro_energy": round(
+                (mean_feat("gx_energy") + mean_feat("gy_energy") + mean_feat("gz_energy")) / 3.0,
+                4,
+            ),
         })
     return timeline
 
 
-def run_pipeline(accel_path: str, gyro_path: str):
+def run_pipeline(accel_path, gyro_path):
     accel, gyro = data_loader.load_accel_gyro(accel_path, gyro_path)
 
     merged = prep.match_timestamps(accel, gyro)
@@ -65,10 +83,11 @@ def run_pipeline(accel_path: str, gyro_path: str):
     cleaned = prep.handle_missing(resampled, accel["timestamp_ms"])
     feature_rows, meta = prep.make_windows(cleaned)
 
+    t0_ms = int(cleaned["timestamp_ms"].iloc[0]) if len(cleaned) else 0
+
     model, columns = classifier.load_model()
     preds, confidences = classifier.classify_windows(feature_rows, model, columns)
-
-    timeline = build_timeline(meta, preds, confidences)
+    timeline = build_timeline(meta, preds, confidences, feature_rows, t0_ms)
 
     stats = {
         "raw_accel_samples": len(accel),
@@ -78,15 +97,20 @@ def run_pipeline(accel_path: str, gyro_path: str):
         "clean_samples_after_gap_removal": len(cleaned),
         "windows_classified": len(feature_rows),
         "timeline_segments": len(timeline),
+        "time_base": "seconds from start of recording",
+        "t0_ms": t0_ms,
+        "recording_duration_s": round(
+            (float(cleaned["timestamp_ms"].iloc[-1]) - t0_ms) / 1000.0, 1
+        ) if len(cleaned) else 0.0,
     }
     return timeline, stats
 
 
 if __name__ == "__main__":
-    import os
-    accel_p = os.path.join(os.path.dirname(__file__), "data", "raw", "demo-user-01_accel_raw.csv")
-    gyro_p = os.path.join(os.path.dirname(__file__), "data", "raw", "demo-user-01_gyro_raw.csv")
+    root = os.path.dirname(__file__)
+    accel_p = os.path.join(root, "data", "raw", "demo-user-01_accel_raw.csv")
+    gyro_p = os.path.join(root, "data", "raw", "demo-user-01_gyro_raw.csv")
     tl, stats = run_pipeline(accel_p, gyro_p)
     print(stats)
-    for seg in tl[:10]:
+    for seg in tl[:12]:
         print(seg)

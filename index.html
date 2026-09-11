@@ -42,12 +42,13 @@
         </div>
 
         <div class="examples">
-            <button class="example">What activity was the user performing?</button>
+            <button class="example">What activity is the user performing?</button>
+            <button class="example">Is the user running?</button>
             <button class="example">How long was the user walking?</button>
-            <button class="example">Did the user run?</button>
-            <button class="example">When did the user start running?</button>
-            <button class="example">Did they walk longer than they ran?</button>
-            <button class="example">How many times did the user walk?</button>
+            <button class="example">Did the user spend more time walking or running?</button>
+            <button class="example">Did the user begin running at any point, and if so, when?</button>
+            <button class="example">Did the user lie down for a prolonged period?</button>
+            <button class="example">Was the user using a wheeled or pedal-based mode of movement?</button>
         </div>
 
         <div id="loading" class="loading">Reading through the sensor timeline…</div>
@@ -80,8 +81,12 @@
             </div>
 
             <div class="result-box full">
-                <div class="result-label">Why</div>
+                <div class="result-label">Explanation</div>
                 <div id="explanation" class="result-value">—</div>
+            </div>
+            <div class="result-box full">
+                <div class="result-label">Required output format (seconds from start)</div>
+                <pre id="formatted" class="result-value formatted-block">—</pre>
             </div>
         </div>
     </section>

@@ -237,6 +237,14 @@ h1 {
     word-break: break-word;
 }
 
+.formatted-block {
+    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 0;
+}
+
 /* ---------- timeline ---------- */
 
 #timeline {
