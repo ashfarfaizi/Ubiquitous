@@ -118,15 +118,20 @@ def _dominant(timeline):
     return act, totals[act]
 
 
-def _fmt_spans(segs, limit=8):
+def _fmt_spans(segs, limit=None):
     if not segs:
         return "N/A"
+    use = segs if limit is None else segs[:limit]
     parts = []
-    for seg in segs[:limit]:
+    for seg in use:
         a = int(round(seg["start_s"]))
         b = int(round(seg["end_s"]))
         parts.append("%d to %d" % (a, b))
-    extra = "" if len(segs) <= limit else ", ... (%d intervals)" % len(segs)
+    extra = ""
+    if limit is not None and len(segs) > limit:
+        extra = ", ... (%d intervals)" % len(segs)
+    elif len(segs) > 1:
+        extra = " (%d intervals)" % len(segs)
     return ", ".join(parts) + extra + " (seconds from start)"
 
 
