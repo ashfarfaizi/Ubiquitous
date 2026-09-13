@@ -16,6 +16,7 @@ the feature vector shape is identical either way.
 """
 
 import os
+import tempfile
 import joblib
 import numpy as np
 import pandas as pd
@@ -26,7 +27,48 @@ from sklearn.metrics import accuracy_score, classification_report
 from generate_sample_data import ACTIVITIES, _make_burst, RNG
 import preprocessing as prep
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "data", "model.joblib")
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+_BUNDLED_MODEL = os.path.join(_ROOT, "data", "model.joblib")
+
+
+def _model_candidates():
+    """Bundled path first, then env, then /tmp — serverless roots are read-only."""
+    paths = []
+    env = os.environ.get("MODEL_PATH")
+    if env:
+        paths.append(env)
+    paths.append(_BUNDLED_MODEL)
+    paths.append(os.path.join(tempfile.gettempdir(), "ask_the_sensors_model.joblib"))
+    seen = set()
+    unique = []
+    for p in paths:
+        if p not in seen:
+            seen.add(p)
+            unique.append(p)
+    return unique
+
+
+def _dir_writable(path):
+    directory = os.path.dirname(path) or "."
+    try:
+        os.makedirs(directory, exist_ok=True)
+        probe = os.path.join(directory, ".write_probe")
+        with open(probe, "w") as fh:
+            fh.write("ok")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
+def _save_path():
+    for path in _model_candidates():
+        if _dir_writable(path):
+            return path
+    return os.path.join(tempfile.gettempdir(), "ask_the_sensors_model.joblib")
+
+
+MODEL_PATH = _BUNDLED_MODEL
 
 
 def _build_training_windows(bursts_per_activity: int = 40):
@@ -68,28 +110,33 @@ def train(save: bool = True):
     print(classification_report(y_test, preds, zero_division=0))
 
     if save:
-        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        joblib.dump({"model": clf, "columns": list(X.columns)}, MODEL_PATH, protocol=4)
-        print(f"saved model -> {MODEL_PATH}")
+        path = _save_path()
+        try:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            joblib.dump({"model": clf, "columns": list(X.columns)}, path, protocol=4)
+            print("saved model -> %s" % path)
+        except OSError as exc:
+            print("could not persist model (%s); using in-memory classifier" % exc)
 
     return clf, list(X.columns)
 
 
+def _try_load(path):
+    bundle = joblib.load(path)
+    model, columns = bundle["model"], bundle["columns"]
+    probe = pd.DataFrame(np.zeros((1, len(columns))), columns=columns)
+    model.predict(probe)
+    return model, columns
+
+
 def load_model():
-    if os.path.exists(MODEL_PATH):
+    for path in _model_candidates():
+        if not os.path.exists(path):
+            continue
         try:
-            bundle = joblib.load(MODEL_PATH)
-            model, columns = bundle["model"], bundle["columns"]
-            # Fail fast if this pickle was written by another numpy/sklearn.
-            probe = np.zeros((1, len(columns)), dtype=float)
-            model.predict(probe)
-            return model, columns
+            return _try_load(path)
         except Exception as exc:
-            print("could not use saved model (%s); training a fresh one" % exc)
-            try:
-                os.remove(MODEL_PATH)
-            except OSError:
-                pass
+            print("could not use saved model at %s (%s)" % (path, exc))
     return train(save=True)
 
 

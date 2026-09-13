@@ -70,11 +70,13 @@ def api_query():
 
 
 if __name__ == "__main__":
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "5000"))
     print("Loading recognition pipeline...")
     try:
         _ensure_pipeline()
-        print("Pipeline ready. Open http://127.0.0.1:5000")
+        print("Pipeline ready. Open http://%s:%s" % (host, port))
     except Exception as exc:
         print("Pipeline not ready yet:", exc)
         print("Generate data with: python generate_sample_data.py")
-    app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
+    app.run(host=host, port=port, debug=False, use_reloader=False)

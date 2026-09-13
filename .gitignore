@@ -1,8 +1,5 @@
 __pycache__/
 *.py[cod]
-*.joblib
 .env
 .venv/
 venv/
-# data/raw/*.csv
-# data/model.joblib

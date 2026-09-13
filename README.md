@@ -39,7 +39,7 @@ CSV columns: `timestamp_ms,x,y,z` for both accelerometer and gyroscope. Streams 
 python app.py
 ```
 
-Open http://127.0.0.1:5000
+Open http://127.0.0.1:5000 (or the `PORT` your host assigns). The recognizer loads `data/model.joblib` when present. If that file is missing or the deploy filesystem is read-only, it trains in memory and writes to `/tmp` instead of crashing.
 
 ## Output format
 

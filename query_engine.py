@@ -274,7 +274,7 @@ def answer(question, timeline, stats=None):
             "No. We did not see the smooth cyclic accel / gyro pattern that usually comes with pedaling.",
         )
 
-    if activity and any(w in ql for w in ("how long", "how much time", "total time", "duration")) and "more" not in ql and " or " not in ql:
+    if activity and any(w in ql for w in ("how long", "how much time", "total time", "duration", "spend", "spent")) and "more" not in ql and " or " not in ql:
         segs = _matches(timeline, activity)
         total = int(round(sum(s["duration_s"] for s in segs)))
         label = _pretty(activity)

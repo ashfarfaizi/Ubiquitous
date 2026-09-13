@@ -54,7 +54,14 @@ def resample_25hz(merged: pd.DataFrame) -> pd.DataFrame:
     value_cols = [c for c in merged.columns if c not in ("timestamp_ms", "activity") and not c.startswith("activity")]
 
     for col in value_cols:
-        out[col] = np.interp(grid, merged["timestamp_ms"], merged[col])
+        series = merged[col]
+        if not np.issubdtype(series.dtype, np.number):
+            continue
+        out[col] = np.interp(
+            grid,
+            merged["timestamp_ms"].to_numpy(dtype=float),
+            series.to_numpy(dtype=float),
+        )
 
     if "activity" in merged.columns:
         # nearest-neighbour label carry-over, just for evaluating the demo classifier
