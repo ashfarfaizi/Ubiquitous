@@ -20,6 +20,9 @@ function safeValue(value) {
 async function checkBackend() {
     const dot = document.getElementById("backendDot");
     const status = document.getElementById("backendStatus");
+    if (!dot || !status) {
+        return;
+    }
 
     try {
         const response = await fetch("/api/health");
