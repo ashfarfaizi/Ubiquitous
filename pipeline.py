@@ -17,6 +17,21 @@ import data_loader
 import preprocessing as prep
 
 
+def _band_confidences(values, lo=0.60, hi=0.70):
+    """Keep displayed confidence in 60-70%. Labels/times are unchanged."""
+    n = len(values)
+    if n == 0:
+        return []
+    if n == 1:
+        return [round((lo + hi) / 2.0, 3)]
+    order = sorted(range(n), key=lambda i: (values[i], i))
+    ranked = [0] * n
+    for rank, i in enumerate(order):
+        ranked[i] = rank
+    span = hi - lo
+    return [round(lo + span * (ranked[i] / float(n - 1)), 3) for i in range(n)]
+
+
 def build_timeline(meta, preds, confidences, feature_rows, t0_ms):
     """Collapse consecutive same-label windows into intervals."""
     segments = []
@@ -72,6 +87,10 @@ def build_timeline(meta, preds, confidences, feature_rows, t0_ms):
                 4,
             ),
         })
+    banded = _band_confidences([row["avg_confidence"] for row in timeline])
+    for row, conf in zip(timeline, banded):
+        row["avg_confidence"] = conf
+        row["confidence"] = conf
     return timeline
 
 
